@@ -1,0 +1,6 @@
+{
+  "name": "Avatar Online Indonesia (AOI)",
+  "description": "Nostalgia game virtual world 2D pixel art Avatar Online Indonesia - berkebun, memancing di danau, nongkrong di taman kota, belanja baju gaul, dan mini game kasino.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
