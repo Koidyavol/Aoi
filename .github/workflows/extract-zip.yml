@@ -1,0 +1,118 @@
+name: Extract ZIP to Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip_path:
+        description: "Path ZIP di repository"
+        required: true
+        default: "uploads/project.zip"
+        type: string
+      destination:
+        description: "Folder tujuan hasil ekstrak"
+        required: true
+        default: "extracted"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extract-zip-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Validate and extract ZIP safely
+        env:
+          ZIP_PATH: ${{ inputs.zip_path }}
+          DESTINATION: ${{ inputs.destination }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import stat
+          import shutil
+          import zipfile
+          from pathlib import Path, PurePosixPath
+
+          root = Path.cwd().resolve()
+          zip_input = PurePosixPath(os.environ["ZIP_PATH"])
+          dest_input = PurePosixPath(os.environ["DESTINATION"])
+
+          if zip_input.is_absolute() or ".." in zip_input.parts or not zip_input.parts:
+              raise SystemExit("Path ZIP tidak valid.")
+          if dest_input.is_absolute() or ".." in dest_input.parts or not dest_input.parts:
+              raise SystemExit("Path tujuan tidak valid.")
+          if dest_input.parts[0] in (".git", ".github"):
+              raise SystemExit("Tujuan tidak boleh berada di .git atau .github.")
+
+          archive = (root / str(zip_input)).resolve()
+          dest = (root / str(dest_input)).resolve()
+
+          if not archive.is_relative_to(root) or not archive.is_file():
+              raise SystemExit(f"File ZIP tidak ditemukan: {zip_input}")
+          if not zipfile.is_zipfile(archive):
+              raise SystemExit("File yang dipilih bukan ZIP yang valid.")
+          if not dest.is_relative_to(root) or dest == root:
+              raise SystemExit("Folder tujuan tidak valid.")
+          if dest == archive or dest in archive.parents:
+              raise SystemExit("Folder tujuan tidak boleh mencakup file ZIP.")
+
+          with zipfile.ZipFile(archive) as z:
+              entries = []
+              total_size = 0
+
+              for info in z.infolist():
+                  name = info.filename
+                  path = PurePosixPath(name)
+                  mode = info.external_attr >> 16
+
+                  if path.is_absolute() or ".." in path.parts or "\\" in name:
+                      raise SystemExit(f"Path ZIP tidak aman: {name}")
+                  if path.parts and path.parts[0] in (".git", ".github"):
+                      raise SystemExit(f"ZIP tidak boleh menimpa folder sistem: {name}")
+                  if stat.S_ISLNK(mode):
+                      raise SystemExit(f"Symlink tidak diizinkan: {name}")
+                  if info.file_size > 100 * 1024 * 1024:
+                      raise SystemExit(f"File terlalu besar: {name}")
+                  total_size += info.file_size
+                  if total_size > 500 * 1024 * 1024:
+                      raise SystemExit("Total hasil ekstrak melebihi 500 MB.")
+                  entries.append(info)
+
+              dest.mkdir(parents=True, exist_ok=True)
+
+              for info in entries:
+                  target = (dest / info.filename).resolve()
+                  if not target.is_relative_to(dest):
+                      raise SystemExit(f"Path keluar dari folder tujuan: {info.filename}")
+                  if info.is_dir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      with z.open(info) as source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          print(f"Ekstraksi selesai ke: {dest_input}")
+          PY
+
+      - name: Commit extracted files
+        env:
+          DESTINATION: ${{ inputs.destination }}
+        run: |
+          git add --all -- "$DESTINATION"
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan hasil ekstraksi untuk di-commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Extract ZIP into repository"
+          git push
