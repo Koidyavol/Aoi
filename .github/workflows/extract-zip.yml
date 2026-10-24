@@ -13,6 +13,9 @@ on:
         required: true
         default: "extracted"
         type: string
+  push:
+    paths:
+      - ".github/workflows/extract-zip.yml"
 
 permissions:
   contents: write
@@ -32,8 +35,8 @@ jobs:
 
       - name: Validate and extract ZIP safely
         env:
-          ZIP_PATH: ${{ inputs.zip_path }}
-          DESTINATION: ${{ inputs.destination }}
+          ZIP_PATH: ${{ inputs.zip_path || 'Aoi-main-fixed.zip' }}
+          DESTINATION: ${{ inputs.destination || 'extracted' }}
         run: |
           python3 - <<'PY'
           import os
@@ -105,7 +108,7 @@ jobs:
 
       - name: Commit extracted files
         env:
-          DESTINATION: ${{ inputs.destination }}
+          DESTINATION: ${{ inputs.destination || 'extracted' }}
         run: |
           git add --all -- "$DESTINATION"
           if git diff --cached --quiet; then
