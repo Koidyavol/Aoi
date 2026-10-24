@@ -6,7 +6,7 @@ on:
       zip_path:
         description: "Path ZIP di repository"
         required: true
-        default: "uploads/project.zip"
+        default: "Aoi-main-fixed.zip"
         type: string
       destination:
         description: "Folder tujuan hasil ekstrak"
