@@ -1,0 +1,80 @@
+name: Build AOI APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extracted/Aoi-main/nara.html'
+      - 'extracted/Aoi-main/assets/**'
+      - 'extracted/Aoi-main/android-app/**'
+      - '.github/workflows/aoi-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aoi-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare game HTML and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="extracted/Aoi-main"
+          test -s "$PROJECT/nara.html"
+          test -s "$PROJECT/android-app/settings.gradle"
+          test -s "$PROJECT/android-app/app/build.gradle"
+          test -s "$PROJECT/android-app/app/src/main/java/com/naraworld/game/MainActivity.java"
+
+          ASSET_DIR="$PROJECT/android-app/app/src/main/assets"
+          mkdir -p "$ASSET_DIR/assets"
+          cp "$PROJECT/nara.html" "$ASSET_DIR/nara.html"
+          cp -a "$PROJECT/assets/." "$ASSET_DIR/assets/"
+
+          echo "Game file:"
+          test -s "$ASSET_DIR/nara.html"
+          echo "Asset files copied:"
+          find "$ASSET_DIR/assets" -type f | sort
+          echo "Asset count: $(find "$ASSET_DIR/assets" -type f | wc -l)"
+
+      - name: Build debug APK
+        working-directory: extracted/Aoi-main/android-app
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="extracted/Aoi-main/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          ls -lh "$APK"
+          sha256sum "$APK"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AOI-Android-APK
+          path: extracted/Aoi-main/android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
