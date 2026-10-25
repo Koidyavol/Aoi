@@ -128,6 +128,8 @@ function boot(){
       if(validWorld(s1)){curWorld='NARA';applyWorld(s1);inv={...inv,...s1.inv};coins=Number.isFinite(s1.coins)?s1.coins:0;meta=s1;ok=true}}catch(e){}
   }
   if(!ok){generateWorld(curWorld)}
+  if(curWorld==='HUNT'&&!slimes.length){playerHP=100;for(let i=0;i<5;i++){const tx=22+i*19;slimes.push({id:slimeNextId++,x:tx*TILE,y:groundY(tx*TILE)-18,hp:40,maxHp:40,vx:0,hitAt:0})}}
+  if(curWorld!=='HUNT'){slimes=[];playerHP=100}
   if(!worldList.includes(curWorld))worldList.unshift(curWorld);
   ensureMain();
   if(ok&&meta&&Number.isFinite(meta.px)&&Number.isFinite(meta.py)&&meta.px>=0&&meta.px<WORLD_W*TILE&&meta.py>=0&&meta.py<WORLD_H*TILE){
